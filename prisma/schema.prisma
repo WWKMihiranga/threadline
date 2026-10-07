@@ -1,0 +1,134 @@
+// Threadline – Clothing & Fashion store
+// All money values are stored as whole Sri Lankan Rupees (Int).
+// LKR retail prices have no cents, and integers avoid floating-point rounding.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderStatus {
+  PENDING     // created, waiting for payment (PayHere) or for admin confirmation (WhatsApp)
+  CONFIRMED   // paid via PayHere, or confirmed by admin after WhatsApp chat – stock is deducted here
+  PROCESSING  // being packed
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAYHERE
+  WHATSAPP
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  sortOrder Int       @default(0)
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Product {
+  id             String           @id @default(cuid())
+  name           String
+  slug           String           @unique
+  description    String
+  price          Int              // selling price (LKR)
+  compareAtPrice Int?             // original price when on sale
+  images         String[]         // image URLs (Uploadthing or static)
+  isActive       Boolean          @default(true)
+  isNew          Boolean          @default(false)
+  isFeatured     Boolean          @default(false)
+  categoryId     String
+  category       Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants       ProductVariant[]
+  orderItems     OrderItem[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive, createdAt])
+}
+
+// One row per size + colour combination. Stock lives here, not on Product.
+model ProductVariant {
+  id         String      @id @default(cuid())
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size       String
+  colour     String
+  colourHex  String      @default("#111111")
+  sku        String      @unique
+  stock      Int         @default(0)
+  orderItems OrderItem[]
+
+  @@unique([productId, size, colour])
+  @@index([productId])
+}
+
+model Order {
+  id               String        @id @default(cuid())
+  number           Int           @unique @default(autoincrement()) // shown as TL-1001, sent to PayHere as order_id
+  customerName     String
+  email            String
+  phone            String
+  addressLine      String
+  city             String
+  notes            String?
+  paymentMethod    PaymentMethod
+  paymentStatus    PaymentStatus @default(UNPAID)
+  status           OrderStatus   @default(PENDING)
+  subtotal         Int
+  discount         Int           @default(0) // bulk-order discount
+  shippingFee      Int           @default(0)
+  total            Int
+  stockDeducted    Boolean       @default(false) // guards against double deduction / double restock
+  payherePaymentId String?
+  payhereStatus    String?       // raw status_code from PayHere notify
+  items            OrderItem[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([phone])
+}
+
+// Snapshot of what was bought, so editing/deleting a product never changes past orders.
+model OrderItem {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  productName String
+  size        String
+  colour      String
+  sku         String
+  unitPrice   Int
+  quantity    Int
+  lineTotal   Int
+
+  @@index([orderId])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
