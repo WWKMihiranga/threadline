@@ -6,9 +6,8 @@ Threadline is a responsive online clothing store. It has a customer storefront, 
 
 | | |
 |---|---|
-| **Live application** |  |
-| **Admin panel** |  |
-| **Repository** |  |
+| **Live application** | https://threadline-eight-theta.vercel.app |
+| **Admin panel** | https://threadline-eight-theta.vercel.app/admin |
 
 ---
 
